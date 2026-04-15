@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1"
+    />
+    <meta name="theme-color" content="#22c55e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>Subscribe — EV Buggy</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+  </head>
+  <body>
+    <div id="app" class="app" aria-live="polite">
+      <header class="header">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path
+                d="M13 2L3 14h7l-1 8 11-12h-7l0-8z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </span>
+          <div>
+            <p class="brand-title">EV Buggy Subscription</p>
+            <p class="brand-sub">Quick &amp; easy pass renewal</p>
+          </div>
+        </div>
+      </header>
+
+      <!-- Error: missing userId -->
+      <section id="view-error" class="view view--centered hidden" aria-labelledby="err-title">
+        <div class="card card--center">
+          <div class="icon-circle icon-circle--warn" aria-hidden="true">!</div>
+          <h1 id="err-title" class="h1">Invalid link</h1>
+          <p class="muted">
+            This page needs a valid card link. Please scan the QR code on your RFID card again.
+          </p>
+        </div>
+      </section>
+
+      <!-- Registration -->
+      <section id="view-register" class="view hidden" aria-labelledby="reg-title">
+        <h1 id="reg-title" class="h1">Your details</h1>
+        <p class="lead">One-time setup. We’ll remember you on this device.</p>
+        <form id="form-register" class="card form" novalidate>
+          <label class="field">
+            <span class="label">Full name <span class="req">*</span></span>
+            <input
+              id="input-name"
+              name="name"
+              type="text"
+              autocomplete="name"
+              required
+              maxlength="120"
+              placeholder="As on your ID"
+            />
+          </label>
+          <label class="field">
+            <span class="label">Phone <span class="req">*</span></span>
+            <input
+              id="input-phone"
+              name="phone"
+              type="tel"
+              inputmode="tel"
+              autocomplete="tel"
+              required
+              maxlength="20"
+              placeholder="10-digit mobile"
+            />
+          </label>
+          <label class="field">
+            <span class="label">Email <span class="optional">(optional)</span></span>
+            <input
+              id="input-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              maxlength="120"
+              placeholder="you@example.com"
+            />
+          </label>
+          <button type="submit" class="btn btn--primary btn--large" id="btn-register">
+            Continue to plans
+          </button>
+        </form>
+      </section>
+
+      <!-- Plans -->
+      <section id="view-plans" class="view hidden" aria-labelledby="plans-title">
+        <div class="plans-head">
+          <h1 id="plans-title" class="h1">Choose your plan</h1>
+          <p class="lead">Limited-time pricing on longer packs.</p>
+          <div id="saved-hint" class="hint hidden" role="status">
+            <span class="hint__check" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M20 6L9 17l-5-5"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
+            Details saved for next time
+          </div>
+        </div>
+        <div id="plan-list" class="plan-list"></div>
+        <div class="stack">
+          <button
+            type="button"
+            class="btn btn--primary btn--large"
+            id="btn-pay"
+            disabled
+          >
+            Proceed to Pay
+          </button>
+          <button type="button" class="btn btn--ghost" id="btn-edit-details">
+            Edit details
+          </button>
+        </div>
+      </section>
+
+      <!-- Success -->
+      <section id="view-success" class="view view--centered hidden" aria-labelledby="ok-title">
+        <div class="card card--center success-card">
+          <div class="icon-circle icon-circle--ok" aria-hidden="true">✓</div>
+          <h1 id="ok-title" class="h1">Payment successful</h1>
+          <p class="success-plan" id="success-plan-label"></p>
+          <p class="success-expiry">
+            Valid until
+            <strong id="success-expiry-date"></strong>
+          </p>
+          <p class="muted small">Thank you. You can close this page.</p>
+        </div>
+      </section>
+
+      <!-- Failure -->
+      <section id="view-failure" class="view view--centered hidden" aria-labelledby="fail-title">
+        <div class="card card--center">
+          <div class="icon-circle icon-circle--bad" aria-hidden="true">×</div>
+          <h1 id="fail-title" class="h1">Payment failed</h1>
+          <p class="muted" id="fail-reason"></p>
+          <button type="button" class="btn btn--primary btn--large" id="btn-retry">
+            Try again
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div id="loader" class="loader hidden" aria-hidden="true">
+      <div class="loader__panel">
+        <div class="spinner" aria-hidden="true"></div>
+        <p class="loader__text">Please wait…</p>
+      </div>
+    </div>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script defer src="/js/app.js"></script>
+  </body>
+</html>

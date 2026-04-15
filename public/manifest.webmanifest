@@ -1,0 +1,10 @@
+{
+  "name": "EV Buggy Pay",
+  "short_name": "Buggy Pay",
+  "description": "EV Buggy subscription payment",
+  "start_url": "/pay",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#22c55e",
+  "icons": []
+}
