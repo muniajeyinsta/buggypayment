@@ -1,21 +1,15 @@
 'use strict';
 
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env'), override: true });
 const { createClient } = require('@supabase/supabase-js');
+const { env } = require('./utils/env');
 
 let client;
+let loggedConnection = false;
 
-/**
- * Server-side Supabase client. Prefer SUPABASE_SERVICE_ROLE_KEY in production (bypasses RLS).
- * Falls back to SUPABASE_ANON_KEY if set (ensure RLS policies allow required operations).
- */
 function getSupabase() {
   if (client !== undefined) return client;
-  const url = String(process.env.SUPABASE_URL || '').trim();
-  const key = String(
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '',
-  ).trim();
+  const url = env.supabaseUrl;
+  const key = env.supabaseServiceRoleKey || env.supabaseAnonKey;
   if (!url || !key) {
     client = null;
     return null;
@@ -23,15 +17,25 @@ function getSupabase() {
   client = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  if (!loggedConnection) {
+    loggedConnection = true;
+    console.log('[supabase] client initialized', {
+      url,
+      keyType: env.supabaseServiceRoleKey ? 'service_role' : 'anon',
+      schema: 'public',
+    });
+  }
   return client;
 }
 
 function isSupabaseConfigured() {
-  const url = String(process.env.SUPABASE_URL || '').trim();
-  const key = String(
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '',
-  ).trim();
+  const url = env.supabaseUrl;
+  const key = env.supabaseServiceRoleKey || env.supabaseAnonKey;
   return Boolean(url && key);
 }
 
-module.exports = { getSupabase, isSupabaseConfigured };
+function isUsingServiceRole() {
+  return Boolean(env.supabaseServiceRoleKey);
+}
+
+module.exports = { getSupabase, isSupabaseConfigured, isUsingServiceRole };
