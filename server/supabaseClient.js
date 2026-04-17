@@ -19,8 +19,16 @@ function getSupabase() {
   });
   if (!loggedConnection) {
     loggedConnection = true;
+    let urlLog = url;
+    if (env.isProduction) {
+      try {
+        urlLog = new URL(url).host;
+      } catch {
+        urlLog = '(invalid SUPABASE_URL)';
+      }
+    }
     console.log('[supabase] client initialized', {
-      url,
+      url: urlLog,
       keyType: env.supabaseServiceRoleKey ? 'service_role' : 'anon',
       schema: 'public',
     });

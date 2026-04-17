@@ -16,7 +16,8 @@ const env = {
   /** Writes / payment-related DB paths. */
   dbWriteTimeoutMs: Number(readEnv('DB_WRITE_TIMEOUT_MS', '8000')) || 8000,
   rateLimitGlobalMax: Number(readEnv('RATE_LIMIT_GLOBAL_MAX', '100')) || 100,
-  rateLimitPaymentMax: Number(readEnv('RATE_LIMIT_PAYMENT_MAX', '20')) || 20,
+  /** Per-IP cap on payment endpoints (create-order + verify-payment share this budget). */
+  rateLimitPaymentMax: Number(readEnv('RATE_LIMIT_PAYMENT_MAX', '15')) || 15,
   razorpayKeyId: readEnv('RAZORPAY_KEY_ID'),
   razorpayKeySecret: readEnv('RAZORPAY_KEY_SECRET'),
   supabaseUrl: readEnv('SUPABASE_URL'),

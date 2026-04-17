@@ -3,9 +3,13 @@
 const { debugUsersSample, getUserStatus } = require('../services/userService');
 const { userStatusCache } = require('../services/userStatusCache');
 const { normalizeUid } = require('../utils/validators');
+const { env } = require('../utils/env');
 
 async function userRoutes(app) {
   app.get('/debug/users', async (_request, reply) => {
+    if (env.isProduction) {
+      return reply.status(404).send({ error: 'Not found' });
+    }
     const result = await debugUsersSample();
     return reply.send(result);
   });

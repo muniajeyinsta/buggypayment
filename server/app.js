@@ -27,16 +27,8 @@ function buildServer() {
     bodyLimit: 32 * 1024,
   });
 
-  let loadLogCount = 0;
   app.addHook('onRequest', async (request) => {
     request._startedAt = Date.now();
-    if (!env.isProduction) {
-      console.log(`[req] ${request.method} ${request.url}`);
-    }
-    if (!env.isProduction && request.headers['x-load-test'] && loadLogCount < 3) {
-      loadLogCount += 1;
-      console.log('[load-test] request seen', { ip: request.ip });
-    }
   });
 
   app.addHook('onResponse', async (request, reply) => {
@@ -113,6 +105,13 @@ function buildServer() {
         error: 'Too many requests',
         retry_after: error.retryAfter,
       });
+    }
+
+    if (error.code === 'FST_ERR_CTP_INVALID_JSON_BODY') {
+      return reply.status(400).send({ error: 'Invalid JSON body' });
+    }
+    if (error.code === 'FST_ERR_CTP_EMPTY_JSON_BODY') {
+      return reply.status(400).send({ error: 'Empty JSON body' });
     }
 
     if (error instanceof AppError) {

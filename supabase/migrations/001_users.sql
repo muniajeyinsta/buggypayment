@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
   "expiryDate" DATE,
   "lastPaymentId" TEXT,
   "lastOrderId" TEXT,
+  "paidAt" TIMESTAMPTZ,
   "createdAt" TIMESTAMPTZ DEFAULT NOW(),
   "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );

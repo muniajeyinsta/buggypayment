@@ -18,18 +18,18 @@ function logStartupBanner(port, requestedPort) {
     console.log('  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n');
   }
 
-  const base = `http://localhost:${port}`;
+  const base = env.isProduction ? `http://0.0.0.0:${port}` : `http://localhost:${port}`;
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('  Buggy backend — server ready');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`  URL     ${base}`);
+  console.log(`  Listen  ${base}  (process.env.PORT=${env.port})`);
   console.log('  Routes');
-  console.log(`    GET   ${base}/`);
-  console.log(`    GET   ${base}/health`);
-  console.log(`    GET   ${base}/user/:uid`);
-  console.log(`    GET   ${base}/debug/users`);
-  console.log(`    POST  ${base}/create-order`);
-  console.log(`    POST  ${base}/verify-payment`);
+  console.log(`    GET   /`);
+  console.log(`    GET   /health`);
+  console.log(`    GET   /user/:uid`);
+  console.log(`    GET   /debug/users`);
+  console.log(`    POST  /create-order`);
+  console.log(`    POST  /verify-payment`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`  PID     ${process.pid} (this terminal owns the server process)`);
   console.log('  Tip     PowerShell: npm.cmd start   OR   node server/index.js');

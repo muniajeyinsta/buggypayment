@@ -1,14 +1,16 @@
 'use strict';
 
-const { createOrder, verifySignature } = require('../services/paymentService');
+const { createOrder, verifySignature, assertPaidOrderMatchesUser } = require('../services/paymentService');
 const { markPaymentPaid } = require('../services/userService');
 const { userStatusCache } = require('../services/userStatusCache');
 const { AppError } = require('../utils/http');
 const {
-  normalizePlan,
   normalizeUid,
+  requirePlan,
   requireRazorpayId,
   requireRazorpaySignature,
+  sanitizeName,
+  sanitizePhone,
 } = require('../utils/validators');
 const { env } = require('../utils/env');
 
@@ -26,14 +28,21 @@ async function paymentRoutes(app) {
       },
     },
     async (request, reply) => {
+      const t0 = Date.now();
       const body = request.body || {};
       const uid = normalizeUid(body.uid || body.userId);
-      const plan = normalizePlan(body.plan);
-      const order = await createOrder({
+      const plan = requirePlan(body.plan);
+      const name = sanitizeName(body.name);
+      const phone = sanitizePhone(body.phone);
+
+      const order = await createOrder({ uid, plan, name, phone });
+      request.log.info({
+        msg: 'payment_order_created',
         uid,
         plan,
-        name: body.name,
-        phone: body.phone,
+        order_id: order.order_id,
+        timestamp: new Date().toISOString(),
+        response_time_ms: Date.now() - t0,
       });
       return reply.send(order);
     },
@@ -47,22 +56,36 @@ async function paymentRoutes(app) {
       },
     },
     async (request, reply) => {
+      const t0 = Date.now();
       const body = request.body || {};
       const uid = normalizeUid(body.uid || body.userId);
+      const plan = requirePlan(body.plan);
       const orderId = requireRazorpayId(body.razorpay_order_id, 'razorpay_order_id');
       const paymentId = requireRazorpayId(body.razorpay_payment_id, 'razorpay_payment_id');
       const signature = requireRazorpaySignature(body.razorpay_signature);
 
-      const verified = verifySignature({ orderId, paymentId, signature });
-      if (!verified) throw new AppError(400, 'Invalid payment signature');
+      const signatureOk = verifySignature({ orderId, paymentId, signature });
+      if (!signatureOk) throw new AppError(400, 'Invalid payment signature');
 
-      const updated = await markPaymentPaid(uid, orderId, paymentId);
+      await assertPaidOrderMatchesUser({ orderId, uid, plan });
+
+      const updated = await markPaymentPaid(uid, orderId, paymentId, plan);
       userStatusCache.del(uid);
 
-      return reply.send({
-        verified: true,
+      request.log.info({
+        msg: 'payment_succeeded',
+        uid,
+        payment_id: paymentId,
+        order_id: orderId,
+        plan,
+        timestamp: new Date().toISOString(),
         status: updated.status,
-        valid_until: updated.valid_until,
+        response_time_ms: Date.now() - t0,
+      });
+
+      return reply.send({
+        ...updated,
+        verified: true,
       });
     },
   );
