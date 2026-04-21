@@ -14,6 +14,11 @@ const {
 } = require('../utils/validators');
 const { env } = require('../utils/env');
 
+function optionalBodyString(value) {
+  const s = String(value == null ? '' : value).trim();
+  return s || undefined;
+}
+
 const paymentRateLimit = {
   max: env.rateLimitPaymentMax,
   timeWindow: '1 minute',
@@ -34,8 +39,23 @@ async function paymentRoutes(app) {
       const plan = requirePlan(body.plan);
       const name = sanitizeName(body.name);
       const phone = sanitizePhone(body.phone);
+      const email = optionalBodyString(body.email);
+      const apartment_name = optionalBodyString(body.apartment_name);
+      const tower = optionalBodyString(body.tower);
+      const floor = optionalBodyString(body.floor);
+      const flat_number = optionalBodyString(body.flat_number);
 
-      const order = await createOrder({ uid, plan, name, phone });
+      const order = await createOrder({
+        uid,
+        plan,
+        name,
+        phone,
+        email,
+        apartment_name,
+        tower,
+        floor,
+        flat_number,
+      });
       request.log.info({
         msg: 'payment_order_created',
         uid,

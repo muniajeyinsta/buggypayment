@@ -4,17 +4,42 @@ const { getSupabase, isSupabaseConfigured } = require('../supabaseClient');
 const { withTimeout } = require('../utils/async');
 const { env } = require('../utils/env');
 const { AppError } = require('../utils/http');
-const { PLAN_DURATION_MONTHS } = require('../utils/constants');
+const { PLAN_DURATION_MONTHS, PLAN_AMOUNT_INR } = require('../utils/constants');
 
 const TABLE = 'users';
+/** New Supabase layout (snake_case). Probed first; legacy schemas follow for older DBs. */
 const SCHEMAS = [
+  {
+    id: 'user_id',
+    status: 'status',
+    expiry: 'expiry_date',
+    name: 'name',
+    phone: 'phone',
+    email: 'email',
+    apartment_name: 'apartment_name',
+    tower: 'tower',
+    floor: 'floor',
+    flat_number: 'flat_number',
+    plan: 'plan',
+    amountPaid: 'amount_paid',
+    startDate: 'start_date',
+    createdAt: 'created_at',
+    paymentId: 'last_payment_id',
+    orderId: 'last_order_id',
+    paidAt: null,
+    updatedAt: 'updated_at',
+    autoPay: 'auto_pay',
+  },
   {
     id: 'userId',
     status: 'status',
     expiry: 'expiryDate',
     name: 'name',
     phone: 'phone',
+    email: 'email',
     plan: 'plan',
+    amountPaid: 'amountPaid',
+    startDate: 'startDate',
     createdAt: 'createdAt',
     paymentId: 'lastPaymentId',
     orderId: 'lastOrderId',
@@ -36,7 +61,23 @@ const SCHEMAS = [
   },
 ];
 
+const OPTIONAL_UPSERT_DETAIL_KEYS = [
+  ['email', 'email'],
+  ['apartment_name', 'apartment_name'],
+  ['tower', 'tower'],
+  ['floor', 'floor'],
+  ['flat_number', 'flat_number'],
+];
+
+function omitUndefined(obj) {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+}
+
 let detected = null;
+
+function isPaidStatus(value) {
+  return Boolean(value && String(value).trim().toLowerCase() === 'paid');
+}
 
 function addCalendarMonthsLocal(date, months) {
   const d = new Date(date.getTime());
@@ -44,6 +85,37 @@ function addCalendarMonthsLocal(date, months) {
   d.setMonth(d.getMonth() + months);
   if (d.getDate() < day) d.setDate(0);
   return d;
+}
+
+/** API date-only string YYYY-MM-DD, or null if missing / invalid (never throws). */
+function normalizeExpiryForApi(value) {
+  try {
+    if (value == null || value === '') return null;
+    if (value instanceof Date) {
+      if (Number.isNaN(value.getTime())) return null;
+      return value.toISOString().slice(0, 10);
+    }
+    const s = String(value).trim();
+    if (!s) return null;
+    const ymd = s.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+      const parts = ymd.split('-').map((n) => Number(n));
+      const y = parts[0];
+      const m = parts[1];
+      const d = parts[2];
+      if (!y || !m || !d) return null;
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+      return ymd;
+    }
+    const t = Date.parse(s);
+    if (Number.isNaN(t)) return null;
+    const out = new Date(t);
+    if (Number.isNaN(out.getTime())) return null;
+    return out.toISOString().slice(0, 10);
+  } catch {
+    return null;
+  }
 }
 
 function computeNewExpiry(plan, currentStatus, currentExpiryStr) {
@@ -54,12 +126,14 @@ function computeNewExpiry(plan, currentStatus, currentExpiryStr) {
   today.setHours(0, 0, 0, 0);
   let base = today;
 
-  if (currentStatus === 'Paid' && currentExpiryStr) {
-    const raw = String(currentExpiryStr).slice(0, 10);
-    const cur = new Date(`${raw}T12:00:00`);
-    if (!Number.isNaN(cur.getTime())) {
-      const curDay = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate());
-      if (curDay > base) base = curDay;
+  if (isPaidStatus(currentStatus) && currentExpiryStr != null && currentExpiryStr !== '') {
+    const normalized = normalizeExpiryForApi(currentExpiryStr);
+    if (normalized) {
+      const cur = new Date(`${normalized}T12:00:00`);
+      if (!Number.isNaN(cur.getTime())) {
+        const curDay = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate());
+        if (curDay > base) base = curDay;
+      }
     }
   }
 
@@ -86,16 +160,28 @@ function toIsoTimestamp(value) {
 }
 
 function paidResponseFromRow(data, schema, paidAtFallback) {
-  const validUntil = data[schema.expiry];
+  const rawExpiry = data[schema.expiry];
+  const validUntil = normalizeExpiryForApi(rawExpiry);
+  if (rawExpiry != null && rawExpiry !== '' && validUntil == null) {
+    console.warn('[payment] invalid_expiry_on_row');
+  }
   const paidAtRaw =
     (schema.paidAt && data[schema.paidAt]) ||
     (schema.updatedAt && data[schema.updatedAt]) ||
     paidAtFallback;
   const paid_at = toIsoTimestamp(paidAtRaw);
 
+  const statusStr = data[schema.status] != null ? String(data[schema.status]) : null;
+  if (statusStr) {
+    const sl = statusStr.toLowerCase();
+    if (sl !== 'paid' && sl !== 'pending') {
+      console.warn('[payment] unexpected_user_status_on_row', { status: statusStr });
+    }
+  }
+
   return {
     ok: true,
-    status: data[schema.status],
+    status: statusStr,
     valid_until: validUntil,
     expiryDate: validUntil,
     ...(paid_at ? { paid_at } : {}),
@@ -150,6 +236,48 @@ async function detectSchema() {
   throw new AppError(500, 'Users table not found in database');
 }
 
+/**
+ * Safe GET /user payload: always string userId (from row or uid), status defaults to Pending,
+ * valid_until YYYY-MM-DD or null. Logs edge cases with console.warn.
+ */
+function finalizeUserStatusResponse(uid, input) {
+  const uidStr = uid != null && String(uid).trim() !== '' ? String(uid).trim() : '';
+  if (!input || typeof input !== 'object') {
+    console.warn('[user_status] unexpected_data_format', { user_id: uidStr || null });
+    return {
+      userId: uidStr || null,
+      status: 'Pending',
+      valid_until: null,
+    };
+  }
+
+  const userId =
+    input.userId != null && String(input.userId).trim() !== ''
+      ? String(input.userId).trim()
+      : uidStr || null;
+
+  const status =
+    input.status != null && String(input.status).trim() !== ''
+      ? String(input.status).trim()
+      : 'Pending';
+
+  const rawExpiryInput = input.valid_until;
+  const valid_until = normalizeExpiryForApi(rawExpiryInput);
+
+  const sl = status.toLowerCase();
+  if (sl !== 'paid' && sl !== 'pending') {
+    console.warn('[user_status] unexpected_status', { user_id: userId, status });
+  }
+  if (rawExpiryInput != null && rawExpiryInput !== '' && valid_until == null) {
+    console.warn('[user_status] invalid_expiry', { user_id: userId });
+  }
+  if (isPaidStatus(status) && valid_until == null) {
+    console.warn('[user_status] paid_missing_expiry', { user_id: userId });
+  }
+
+  return { userId, status, valid_until };
+}
+
 async function getUserStatus(uid) {
   if (!isSupabaseConfigured()) throw new AppError(503, 'Database not configured');
   const sb = getSupabase();
@@ -157,7 +285,7 @@ async function getUserStatus(uid) {
 
   const rowQuery = sb
     .from(TABLE)
-    .select(`${schema.status}, ${schema.expiry}`)
+    .select(`${schema.id}, ${schema.status}, ${schema.expiry}`)
     .eq(schema.id, uid)
     .maybeSingle();
   const { data, error } = await withTimeout(
@@ -173,10 +301,14 @@ async function getUserStatus(uid) {
   }
   if (!data) throw new AppError(404, 'User not found');
 
-  return {
+  const rowId = data[schema.id];
+  const userIdFromRow =
+    rowId != null && String(rowId).trim() !== '' ? String(rowId).trim() : String(uid);
+  return finalizeUserStatusResponse(uid, {
+    userId: userIdFromRow,
     status: data[schema.status],
     valid_until: data[schema.expiry],
-  };
+  });
 }
 
 async function upsertUserForOrder(uid, details = {}) {
@@ -184,8 +316,12 @@ async function upsertUserForOrder(uid, details = {}) {
   const sb = getSupabase();
   const schema = await detectSchema();
 
+  const userKey = schema.id;
+  const userIdValue = String(uid == null ? '' : uid).trim();
+  if (!userIdValue) throw new AppError(400, 'uid is required');
+
   const payload = {
-    [schema.id]: uid,
+    [userKey]: userIdValue,
     [schema.name]: details.name ? String(details.name).trim() : null,
     [schema.phone]: details.phone ? String(details.phone).trim() : null,
     [schema.status]: 'Pending',
@@ -195,10 +331,38 @@ async function upsertUserForOrder(uid, details = {}) {
     payload[schema.plan] = String(details.plan).trim();
   }
 
-  const upsert = sb.from(TABLE).upsert(payload, { onConflict: schema.id, ignoreDuplicates: false });
+  if (schema.amountPaid && details.plan) {
+    const amt = PLAN_AMOUNT_INR[String(details.plan).trim()];
+    if (amt != null) payload[schema.amountPaid] = amt;
+  }
+
+  if (schema.orderId && details.razorpay_order_id) {
+    const oid = String(details.razorpay_order_id).trim();
+    if (oid) payload[schema.orderId] = oid;
+  }
+
+  if (schema.updatedAt) {
+    payload[schema.updatedAt] = new Date().toISOString();
+  }
+
+  for (const [schemaKey, detailKey] of OPTIONAL_UPSERT_DETAIL_KEYS) {
+    const col = schema[schemaKey];
+    if (!col) continue;
+    const raw = details[detailKey];
+    if (raw == null) continue;
+    const trimmed = String(raw).trim();
+    if (trimmed) payload[col] = trimmed;
+  }
+
+  const cleanPayload = omitUndefined(payload);
+
+  const upsert = sb
+    .from(TABLE)
+    .upsert(cleanPayload, { onConflict: userKey, ignoreDuplicates: false });
   const { error } = await withTimeout(upsert, env.dbWriteTimeoutMs, 'Database write timed out');
 
   if (error) {
+    console.error('DB ERROR:', error);
     logSupabaseError('upsert user for order', error);
     if (error.code === '42P01') throw new AppError(500, 'Users table not found in database');
     throw new AppError(502, 'Failed to save order against user');
@@ -264,6 +428,11 @@ async function markPaymentPaid(uid, orderId, paymentId, plan) {
   }
   if (!data) throw new AppError(404, 'User not found');
 
+  console.info('[payment] user_db_updated', {
+    user_id: uid,
+    status: data[schema.status],
+  });
+
   return paidResponseFromRow(data, schema, paidAtIso);
 }
 
@@ -292,4 +461,5 @@ module.exports = {
   upsertUserForOrder,
   markPaymentPaid,
   debugUsersSample,
+  finalizeUserStatusResponse,
 };

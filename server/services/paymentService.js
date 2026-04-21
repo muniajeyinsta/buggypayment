@@ -24,7 +24,17 @@ function buildReceipt(uid) {
   return `uid_${uid}_${Date.now()}`.slice(0, 40);
 }
 
-async function createOrder({ uid, plan, name, phone }) {
+async function createOrder({
+  uid,
+  plan,
+  name,
+  phone,
+  email,
+  apartment_name,
+  tower,
+  floor,
+  flat_number,
+}) {
   if (!razorpay) throw new AppError(503, 'Payments are not configured');
 
   let order;
@@ -39,7 +49,17 @@ async function createOrder({ uid, plan, name, phone }) {
     throw new AppError(502, 'Failed to create Razorpay order');
   }
 
-  await upsertUserForOrder(uid, { name, phone, plan });
+  await upsertUserForOrder(uid, {
+    name,
+    phone,
+    plan,
+    email,
+    apartment_name,
+    tower,
+    floor,
+    flat_number,
+    razorpay_order_id: order.id,
+  });
 
   return {
     ok: true,

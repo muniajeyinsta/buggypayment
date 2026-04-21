@@ -1,6 +1,6 @@
 'use strict';
 
-const { debugUsersSample, getUserStatus } = require('../services/userService');
+const { debugUsersSample, getUserStatus, finalizeUserStatusResponse } = require('../services/userService');
 const { userStatusCache } = require('../services/userStatusCache');
 const { normalizeUid } = require('../utils/validators');
 const { env } = require('../utils/env');
@@ -17,8 +17,10 @@ async function userRoutes(app) {
   app.get('/user/:uid', async (request, reply) => {
     const uid = normalizeUid(request.params.uid);
 
+    request.log.info({ msg: 'user_status_lookup', user_id: uid });
+
     const cached = userStatusCache.get(uid);
-    if (cached) return reply.send(cached);
+    if (cached) return reply.send(finalizeUserStatusResponse(uid, cached));
 
     const userStatus = await getUserStatus(uid);
     userStatusCache.set(uid, userStatus);
