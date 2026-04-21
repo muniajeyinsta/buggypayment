@@ -1,7 +1,13 @@
 'use strict';
 
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env'), override: true });
+require('dotenv').config();
+
+console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'FOUND' : 'MISSING');
+console.log(
+  'SUPABASE_KEY:',
+  process.env.SUPABASE_SERVICE_ROLE_KEY ? 'FOUND' : 'MISSING',
+);
 
 const { buildServer } = require('./app');
 const { env, logStartupConfigWarnings, hasSupabaseConfig, hasRazorpayConfig } = require('./utils/env');

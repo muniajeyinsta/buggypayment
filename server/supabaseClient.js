@@ -5,12 +5,19 @@ const { env } = require('./utils/env');
 
 let client;
 let loggedConnection = false;
+let loggedMissingConfig = false;
 
 function getSupabase() {
   if (client !== undefined) return client;
-  const url = env.supabaseUrl;
-  const key = env.supabaseServiceRoleKey || env.supabaseAnonKey;
+  const url = String(process.env.SUPABASE_URL || '').trim();
+  const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
   if (!url || !key) {
+    if (!loggedMissingConfig) {
+      loggedMissingConfig = true;
+      console.error(
+        '[supabase] missing required env vars: SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY',
+      );
+    }
     client = null;
     return null;
   }
@@ -29,7 +36,7 @@ function getSupabase() {
     }
     console.log('[supabase] client initialized', {
       url: urlLog,
-      keyType: env.supabaseServiceRoleKey ? 'service_role' : 'anon',
+      keyType: 'service_role',
       schema: 'public',
     });
   }
@@ -37,8 +44,8 @@ function getSupabase() {
 }
 
 function isSupabaseConfigured() {
-  const url = env.supabaseUrl;
-  const key = env.supabaseServiceRoleKey || env.supabaseAnonKey;
+  const url = String(process.env.SUPABASE_URL || '').trim();
+  const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
   return Boolean(url && key);
 }
 

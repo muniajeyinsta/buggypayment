@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const Fastify = require('fastify');
 const cors = require('@fastify/cors');
@@ -12,12 +13,11 @@ const { getUidForLog } = require('./utils/requestLog');
 const { AVAILABLE_ROUTES } = require('./utils/routesManifest');
 const paymentRoutes = require('./routes/paymentRoutes');
 const userRoutes = require('./routes/userRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 function buildServer() {
-  const corsOrigin = env.corsOrigin
-    ? env.corsOrigin.split(',').map((item) => item.trim()).filter(Boolean)
-    : true;
   const publicDir = path.join(__dirname, '..', 'public');
+  const adminDistDir = path.join(__dirname, '..', 'admin', 'dist');
 
   const app = Fastify({
     trustProxy: true,
@@ -55,7 +55,7 @@ function buildServer() {
   });
 
   app.register(cors, {
-    origin: corsOrigin,
+    origin: '*',
     methods: ['GET', 'POST'],
   });
 
@@ -65,6 +65,35 @@ function buildServer() {
     wildcard: false,
     index: false,
   });
+
+  if (fs.existsSync(adminDistDir)) {
+    app.register(fastifyStatic, {
+      root: adminDistDir,
+      prefix: '/admin/',
+      wildcard: false,
+      decorateReply: false,
+      index: false,
+    });
+
+    app.get('/admin', async (_request, reply) => {
+      return reply.sendFile('index.html', adminDistDir);
+    });
+
+    app.get('/admin/*', async (request, reply) => {
+      const urlPath = String(request.url || '').split('?')[0];
+      if (
+        urlPath === '/admin/users' ||
+        urlPath.startsWith('/admin/user/') ||
+        urlPath === '/admin/update-user' ||
+        urlPath === '/admin/create-user'
+      ) {
+        return reply.callNotFound();
+      }
+      return reply.sendFile('index.html', adminDistDir);
+    });
+  } else if (!env.isProduction) {
+    app.log.warn({ path: adminDistDir }, 'Admin panel static bundle not found; /admin UI is disabled');
+  }
 
   app.register(rateLimit, {
     global: true,
@@ -81,10 +110,7 @@ function buildServer() {
 
   app.get('/', async (_request, reply) => {
     reply.header('X-Buggy-Backend', '1');
-    return {
-      status: 'running',
-      message: 'Buggy backend API is live',
-    };
+    return reply.sendFile('pay.html');
   });
 
   app.get('/pay', async (_request, reply) => {
@@ -98,6 +124,7 @@ function buildServer() {
 
   app.register(paymentRoutes);
   app.register(userRoutes);
+  app.register(adminRoutes);
 
   app.setErrorHandler((error, request, reply) => {
     if (error.retryAfter != null && (error.statusCode === 429 || error.statusCode === 403)) {

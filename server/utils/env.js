@@ -22,11 +22,10 @@ const env = {
   razorpayKeySecret: readEnv('RAZORPAY_KEY_SECRET'),
   supabaseUrl: readEnv('SUPABASE_URL'),
   supabaseServiceRoleKey: readEnv('SUPABASE_SERVICE_ROLE_KEY'),
-  supabaseAnonKey: readEnv('SUPABASE_ANON_KEY'),
 };
 
 function hasSupabaseConfig() {
-  return Boolean(env.supabaseUrl && (env.supabaseServiceRoleKey || env.supabaseAnonKey));
+  return Boolean(env.supabaseUrl && env.supabaseServiceRoleKey);
 }
 
 function hasRazorpayConfig() {
@@ -39,7 +38,9 @@ function hasRazorpayConfig() {
 function logStartupConfigWarnings() {
   const lines = [];
   if (!hasSupabaseConfig()) {
-    lines.push('Supabase is not configured (SUPABASE_URL + key) — user/payment DB calls will fail until set.');
+    lines.push(
+      'Supabase is not configured (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY) — user/payment DB calls will fail until set.',
+    );
   }
   if (!hasRazorpayConfig()) {
     lines.push('Razorpay is not configured (RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET) — create-order/verify will fail until set.');
