@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'FOUND' : 'MISSING');
 console.log(
@@ -38,7 +38,7 @@ function logStartupBanner(port, requestedPort) {
   console.log(`    POST  /verify-payment`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`  PID     ${process.pid} (this terminal owns the server process)`);
-  console.log('  Tip     PowerShell: npm.cmd start   OR   node server/index.js');
+  console.log('  Tip     PowerShell: npm.cmd start   OR   node index.js');
   if (process.platform === 'win32') {
     console.log('  Win     From repo root: start-local.cmd  (frees :3000, then starts)');
   }
@@ -67,7 +67,7 @@ function maybeOpenBrowserInDev(boundPort) {
 
 /**
  * Production: bind exactly env.port (Railway sets PORT).
- * Development: if that port is busy, try the next few ports so a stale Node on :3000 does not block you.
+ * Development: if that port is busy, try the next few ports so a stale Node on :3001 does not block you.
  */
 async function listenOrDevFallback(app) {
   const start = env.port;
@@ -123,7 +123,7 @@ async function start() {
       console.error(`    netstat -ano | findstr :${env.port}`);
       console.error('    taskkill /PID <pid_from_last_column> /F');
       console.error('\n  Or set a free port:');
-      console.error('    set PORT=3001 && node server\\index.js');
+      console.error('    set PORT=3002 && node index.js');
       if (process.platform === 'win32') {
         console.error('\n  Or run from repo root (frees :3000 then starts):');
         console.error('    start-local.cmd');

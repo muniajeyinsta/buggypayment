@@ -1,53 +1,81 @@
-# RFID Payment Backend (Fastify + Supabase + Razorpay)
+# EV Buggy Payment
 
-Production-focused backend for RFID-based user subscriptions.
+Mobile-first web payment for EV buggy subscriptions (UPI + Razorpay).
 
-## Plans (subscription length)
+## Project Structure
 
-| `plan` value | Duration |
-|--------------|----------|
-| `monthly`    | 1 month  |
-| `3months`    | 3 months |
-| `6months`    | 6 months |
-| `12months`   | 12 months |
-
-Amounts for each plan are defined in `server/utils/constants.js` and must match what you charge in Razorpay.
-
-## API
-
-- `POST /create-order`
-  - body: `{ "uid": "A001", "plan": "monthly", "name": "…", "phone": "…" }` (`userId` accepted instead of `uid`)
-  - **`plan` is required** (one of the values above).
-  - response: `{ "ok", "order_id", "amount", "currency", "key_id" }`
-
-- `POST /verify-payment`
-  - body: `{ "uid", "plan", "razorpay_order_id", "razorpay_payment_id", "razorpay_signature" }`
-  - **`plan` is required** and must match the order created for that user.
-  - verifies the Razorpay signature and paid order, then updates the user to **Paid** with `valid_until` / `expiryDate` and optional **`paid_at`** (see database).
-  - response: `{ "ok", "verified", "status", "valid_until", "expiryDate", "paid_at" }`  
-    (`expiryDate` mirrors `valid_until` for older clients.)
-
-- `GET /user/:uid`
-  - response: `{ "status", "valid_until" }`
-  - cache-first lookup with short TTL for low-latency RFID reads
-
-## Database
-
-- Primary user key: `userId` (see `supabase/migrations/001_users.sql`).
-- Optional: run `002_optional_paid_at.sql` on databases created before `paidAt` was added to `001_users.sql`. The app probes for `paidAt` at runtime and sets it on successful payment when the column exists.
-
-## Performance notes
-
-- UID-only indexed lookup path (`PRIMARY KEY` on `userId`).
-- Selective columns only for hot paths.
-- In-memory TTL cache (~15s) with eviction to reduce repetitive read load.
-- Stateless endpoints (cache is optional, process-local optimization).
-
-## Run
-
-```bash
-npm install
-npm start
+```
+buggypayment/
+├── frontend/          # Next.js app (UI)
+│   ├── src/app/       # React pages & components  
+│   ├── public/        # Static assets (QR images, manifest)
+│   └── next.config.js # Proxies API calls to backend
+├── backend/           # Fastify API server
+│   ├── routes/        # paymentRoutes, userRoutes, adminRoutes, upiRoutes
+│   ├── services/      # paymentService, userService, cacheService
+│   ├── utils/         # env, validators, constants, http helpers
+│   ├── scripts/       # verify-http, load-user-lookup
+│   ├── supabase/      # DB migrations
+│   ├── uploads/       # Screenshot uploads
+│   ├── index.js       # Server entry point
+│   └── app.js         # Fastify app builder
+└── package.json       # Root orchestration scripts
 ```
 
-Uses `process.env.PORT` (e.g. on Railway).
+## Quick Start
+
+```bash
+# Install all dependencies
+npm run install:all
+
+# Start both frontend & backend in dev mode
+npm run dev
+```
+
+- **Frontend** (Next.js): http://localhost:3000
+- **Backend** (Fastify API): http://localhost:3001
+
+## How It Works
+
+1. **Frontend** (Next.js on `:3000`) serves the React UI
+2. **Backend** (Fastify on `:3001`) handles all API routes
+3. **Next.js rewrites** proxy API calls from the frontend to the backend seamlessly
+4. From the browser's perspective, everything is on the same origin (`:3000`)
+
+## Environment Variables
+
+Create `backend/.env`:
+
+```env
+PORT=3001
+RAZORPAY_KEY_ID=rzp_test_xxx
+RAZORPAY_KEY_SECRET=your_secret
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_key
+UPI_ID=your-upi@bank
+UPI_PAYEE_NAME=Your Name
+```
+
+## API Routes (Backend)
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/health` | Health check |
+| GET | `/user/:uid` | User status lookup |
+| POST | `/create-order` | Create Razorpay order |
+| POST | `/verify-payment` | Verify Razorpay payment |
+| GET | `/upi-config` | Get UPI configuration |
+| POST | `/upi-payment` | Record UPI payment |
+| GET | `/admin/users` | List users (admin) |
+| POST | `/admin/update-user` | Update user (admin) |
+| POST | `/admin/create-user` | Create user (admin) |
+
+## Running Individually
+
+```bash
+# Frontend only
+npm run dev:frontend
+
+# Backend only
+npm run dev:backend
+```

@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 /** Session log for local debugging (no secrets). */
-const DEBUG_LOG = path.join(__dirname, '..', '..', 'debug-f54440.log');
+const DEBUG_LOG = path.join(__dirname, '..', 'debug-f54440.log');
 
 /**
  * One-shot boot snapshot: console + append NDJSON for support / CI checks.

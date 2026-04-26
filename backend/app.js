@@ -18,9 +18,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const upiRoutes = require('./routes/upiRoutes');
 
 function buildServer() {
-  const publicDir = path.join(__dirname, '..', 'public');
-  const adminDistDir = path.join(__dirname, '..', 'admin', 'dist');
-  const uploadsDir = path.join(__dirname, '..', 'uploads');
+  const uploadsDir = path.join(__dirname, 'uploads');
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
   const app = Fastify({
@@ -70,42 +68,6 @@ function buildServer() {
     methods: ['GET', 'POST'],
   });
 
-  app.register(fastifyStatic, {
-    root: publicDir,
-    prefix: '/',
-    wildcard: true,
-    index: false,
-  });
-
-  if (fs.existsSync(adminDistDir)) {
-    app.register(fastifyStatic, {
-      root: adminDistDir,
-      prefix: '/admin/',
-      wildcard: false,
-      decorateReply: false,
-      index: false,
-    });
-
-    app.get('/admin', async (_request, reply) => {
-      return reply.sendFile('index.html', adminDistDir);
-    });
-
-    app.get('/admin/*', async (request, reply) => {
-      const urlPath = String(request.url || '').split('?')[0];
-      if (
-        urlPath === '/admin/users' ||
-        urlPath.startsWith('/admin/user/') ||
-        urlPath === '/admin/update-user' ||
-        urlPath === '/admin/create-user'
-      ) {
-        return reply.callNotFound();
-      }
-      return reply.sendFile('index.html', adminDistDir);
-    });
-  } else if (!env.isProduction) {
-    app.log.warn({ path: adminDistDir }, 'Admin panel static bundle not found; /admin UI is disabled');
-  }
-
   app.register(rateLimit, {
     global: true,
     max: env.isProduction ? env.rateLimitGlobalMax : Math.max(env.rateLimitGlobalMax, 5000),
@@ -119,22 +81,11 @@ function buildServer() {
     },
   });
 
-  app.get('/', async (_request, reply) => {
-    reply.header('X-Buggy-Backend', '1');
-    return reply.sendFile('pay.html');
-  });
-
-  app.get('/pay', async (_request, reply) => {
-    reply.header('X-Buggy-Backend', '1');
-    return reply.sendFile('pay.html');
-  });
-
-
-
+  // Health endpoints
   app.get('/health', async () => ({ status: 'ok' }));
-
   app.get('/api/health', async () => ({ ok: true }));
 
+  // Register API routes
   app.register(paymentRoutes);
   app.register(userRoutes);
   app.register(adminRoutes);

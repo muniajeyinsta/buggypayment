@@ -12,7 +12,7 @@ const {
 } = require('../utils/validators');
 const { env } = require('../utils/env');
 
-const UPLOADS_DIR = path.join(__dirname, '..', '..', 'uploads');
+const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
 function optionalBodyString(value) {
@@ -145,7 +145,8 @@ async function upiRoutes(app) {
     if (!fs.existsSync(filepath)) {
       throw new AppError(404, 'File not found');
     }
-    return reply.sendFile(filename, UPLOADS_DIR);
+    const stream = fs.createReadStream(filepath);
+    return reply.type('application/octet-stream').send(stream);
   });
 }
 

@@ -1,6 +1,26 @@
+# Dependencies
 node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Env files
 .env
+frontend/.env
+frontend/.env.local
+backend/.env
+
+# Build
+frontend/.next/
+frontend/out/
+
+# Logs
 *.log
+debug-*.log
+debug-*.ndjson
+
+# OS
 .DS_Store
-debug-a4dcb6.ndjson
+
+# Uploads
+backend/uploads/
 uploads/
