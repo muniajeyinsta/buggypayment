@@ -1,5 +1,7 @@
 /**
- * EV Buggy — mobile payment flow (Razorpay)
+ * EV Buggy — mobile payment flow (UPI direct)
+ * Uses UPI intent links + QR code for direct payment.
+ * No Razorpay required — payments are recorded for manual verification.
  */
 
 const PLANS = [
@@ -19,6 +21,10 @@ let profile = null;
 let selectedPlan = null;
 /** @type {boolean} */
 let paying = false;
+/** @type {{ upiId: string; payeeName: string } | null} */
+let upiConfig = null;
+/** @type {File | null} */
+let screenshotFile = null;
 
 const $ = (id) => {
   const el = document.getElementById(id);
@@ -71,9 +77,10 @@ function parseUserId() {
 }
 
 function showView(name) {
-  const views = ['view-error', 'view-register', 'view-plans', 'view-success', 'view-failure'];
+  const views = ['view-error', 'view-register', 'view-plans', 'view-upi-pay', 'view-success', 'view-failure'];
   for (const v of views) {
-    $(v).classList.toggle('hidden', v !== name);
+    const el = document.getElementById(v);
+    if (el) el.classList.toggle('hidden', v !== name);
   }
 }
 
@@ -176,106 +183,155 @@ function formatExpiry(d) {
   });
 }
 
-async function postJSON(url, body) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+/* ──── UPI HELPERS ──── */
+
+function buildUpiUrl(amount, txnNote) {
+  if (!upiConfig) return null;
+  const params = new URLSearchParams({
+    pa: upiConfig.upiId,
+    pn: upiConfig.payeeName,
+    am: String(amount),
+    cu: 'INR',
+    tn: txnNote || 'EV Buggy Subscription',
   });
-  const text = await res.text();
-  let data;
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { raw: text };
-  }
-  if (!res.ok) {
-    const parts = [data.error, data.detail].filter((x) => typeof x === 'string' && x.trim());
-    const msg = parts.length ? parts.join(' — ') : res.statusText || 'Request failed';
-    throw new Error(msg);
-  }
-  return data;
+  return `upi://pay?${params.toString()}`;
 }
 
-function openRazorpayCheckout(orderPayload) {
-  return new Promise((resolve, reject) => {
-    if (typeof Razorpay === 'undefined') {
-      reject(new Error('Razorpay script failed to load'));
-      return;
-    }
+function showUpiPaymentView() {
+  if (!selectedPlan || !upiConfig) return;
 
-    let settled = false;
-    const finish = (fn) => {
-      if (settled) return;
-      settled = true;
-      fn();
-    };
+  const amount = selectedPlan.offer;
+  const txnNote = `EV Buggy ${selectedPlan.name} - ${userId}`;
+  const upiUrl = buildUpiUrl(amount, txnNote);
 
-    const options = {
-      key: orderPayload.key_id || orderPayload.keyId,
-      amount: orderPayload.amount,
-      currency: orderPayload.currency || 'INR',
-      order_id: orderPayload.order_id || orderPayload.orderId,
-      name: 'EV Buggy Service',
-      description: selectedPlan ? `${selectedPlan.name} subscription` : 'Subscription',
-      prefill: {
-        name: orderPayload.prefill?.name || profile?.name,
-        contact: orderPayload.prefill?.contact || profile?.phone,
-      },
-      theme: { color: '#22c55e' },
-      modal: {
-        ondismiss: () => {
-          finish(() => reject(new Error('Payment cancelled')));
-        },
-      },
-      handler: (response) => {
-        finish(() => resolve(response));
-      },
-    };
+  // Update the UPI view content
+  $('upi-plan-label').textContent = selectedPlan.name;
+  $('upi-amount-label').textContent = formatINR(amount);
+  $('upi-payee-id').textContent = upiConfig.upiId;
 
-    const rzp = new Razorpay(options);
-    rzp.on('payment.failed', (err) => {
-      const desc = err?.error?.description || err?.error?.reason || 'Payment failed';
-      finish(() => reject(new Error(desc)));
-    });
-    rzp.open();
-  });
+  // Set up the "Open UPI App" button
+  const upiAppBtn = $('btn-open-upi');
+  if (upiUrl) {
+    upiAppBtn.href = upiUrl;
+    upiAppBtn.classList.remove('hidden');
+  }
+
+  // Show QR code image (static image from server)
+  const qrContainer = $('upi-qr-container');
+  qrContainer.innerHTML = `<img src="/IMG_5342.jpeg" alt="UPI QR Code — Scan to pay" class="upi-qr-img" />`;
+
+  // Clear transaction input and screenshot
+  $('input-utr').value = '';
+  screenshotFile = null;
+  resetScreenshotUI();
+  updateConfirmBtnState();
+
+  showView('view-upi-pay');
 }
 
-async function startPayment() {
-  if (!userId || !profile || !selectedPlan || paying) return;
+function resetScreenshotUI() {
+  const preview = $('ss-preview');
+  const label = $('ss-label-text');
+  const removeBtn = $('btn-remove-ss');
+  const input = $('input-screenshot');
+
+  preview.classList.add('hidden');
+  preview.innerHTML = '';
+  removeBtn.classList.add('hidden');
+  label.textContent = 'Upload payment screenshot';
+  input.value = '';
+  screenshotFile = null;
+}
+
+function handleScreenshotSelect(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+
+  // Validate type
+  if (!file.type.startsWith('image/')) {
+    alert('Please select an image file (JPG, PNG, or WebP)');
+    e.target.value = '';
+    return;
+  }
+
+  // Validate size (5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    alert('Screenshot must be under 5 MB');
+    e.target.value = '';
+    return;
+  }
+
+  screenshotFile = file;
+  const label = $('ss-label-text');
+  const preview = $('ss-preview');
+  const removeBtn = $('btn-remove-ss');
+
+  label.textContent = file.name.length > 25 ? file.name.slice(0, 22) + '…' : file.name;
+
+  // Show image preview
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    preview.innerHTML = `<img src="${ev.target.result}" alt="Payment screenshot preview" />`;
+    preview.classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+
+  removeBtn.classList.remove('hidden');
+  updateConfirmBtnState();
+}
+
+function updateConfirmBtnState() {
+  const utr = $('input-utr').value.trim();
+  $('btn-confirm-upi').disabled = utr.length < 6;
+}
+
+async function confirmUpiPayment() {
+  const utr = $('input-utr').value.trim();
+  if (!utr || !userId || !selectedPlan || !profile) return;
 
   paying = true;
-  const btn = $('btn-pay');
-  btn.disabled = true;
+  $('btn-confirm-upi').disabled = true;
 
   try {
     setLoader(true);
-    const order = await postJSON('/create-order', {
-      userId,
-      name: profile.name,
-      phone: profile.phone,
-      email: profile.email || '',
-      plan: selectedPlan.id,
-      amount: selectedPlan.offer,
-    });
-    setLoader(false);
 
-    const response = await openRazorpayCheckout(order);
+    // Build multipart form data
+    const formData = new FormData();
+    formData.append('userId', userId);
+    formData.append('plan', selectedPlan.id);
+    formData.append('amount', String(selectedPlan.offer));
+    formData.append('upiTransactionId', utr);
+    formData.append('name', profile.name);
+    formData.append('phone', profile.phone);
+    formData.append('email', profile.email || '');
 
-    setLoader(true);
-    const verified = await postJSON('/verify-payment', {
-      userId,
-      plan: selectedPlan.id,
-      amount: selectedPlan.offer,
-      razorpay_order_id: response.razorpay_order_id,
-      razorpay_payment_id: response.razorpay_payment_id,
-      razorpay_signature: response.razorpay_signature,
+    if (screenshotFile) {
+      formData.append('screenshot', screenshotFile);
+    }
+
+    const res = await fetch('/upi-payment', {
+      method: 'POST',
+      body: formData,
     });
+
+    const text = await res.text();
+    let result;
+    try {
+      result = text ? JSON.parse(text) : {};
+    } catch {
+      result = { raw: text };
+    }
+
+    if (!res.ok) {
+      const parts = [result.error, result.detail].filter((x) => typeof x === 'string' && x.trim());
+      const msg = parts.length ? parts.join(' — ') : res.statusText || 'Request failed';
+      throw new Error(msg);
+    }
+
     setLoader(false);
 
     $('success-plan-label').textContent = `${selectedPlan.name} — ${formatINR(selectedPlan.offer)}`;
-    const expRaw = verified && verified.expiryDate ? String(verified.expiryDate).slice(0, 10) : '';
+    const expRaw = result && result.expiryDate ? String(result.expiryDate).slice(0, 10) : '';
     const expDate = expRaw
       ? new Date(`${expRaw}T12:00:00`)
       : addMonths(new Date(), selectedPlan.months);
@@ -288,7 +344,22 @@ async function startPayment() {
     showView('view-failure');
   } finally {
     paying = false;
-    updatePlanSelectionUI();
+  }
+}
+
+async function fetchUpiConfig() {
+  try {
+    const res = await fetch('/upi-config');
+    if (!res.ok) throw new Error('Failed to load UPI config');
+    const data = await res.json();
+    upiConfig = {
+      upiId: data.upiId || '',
+      payeeName: data.payeeName || 'EV Buggy',
+    };
+  } catch (e) {
+    console.warn('Could not load UPI config:', e.message);
+    // Fallback — will be configured via env
+    upiConfig = { upiId: '', payeeName: 'EV Buggy' };
   }
 }
 
@@ -299,6 +370,9 @@ function init() {
     showView('view-error');
     return;
   }
+
+  // Fetch UPI config from server
+  fetchUpiConfig();
 
   profile = loadProfile();
 
@@ -320,7 +394,27 @@ function init() {
 
   $('btn-edit-details').addEventListener('click', () => goRegister(true));
 
-  $('btn-pay').addEventListener('click', () => startPayment());
+  $('btn-pay').addEventListener('click', () => {
+    if (!selectedPlan) return;
+    showUpiPaymentView();
+  });
+
+  // UPI view event listeners
+  $('input-utr').addEventListener('input', () => updateConfirmBtnState());
+
+  $('input-screenshot').addEventListener('change', handleScreenshotSelect);
+
+  $('btn-remove-ss').addEventListener('click', (e) => {
+    e.preventDefault();
+    resetScreenshotUI();
+    updateConfirmBtnState();
+  });
+
+  $('btn-confirm-upi').addEventListener('click', () => confirmUpiPayment());
+
+  $('btn-back-plans').addEventListener('click', () => {
+    goPlans(true);
+  });
 
   $('btn-retry').addEventListener('click', () => {
     showView('view-plans');

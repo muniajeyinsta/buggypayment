@@ -7,6 +7,7 @@ const cors = require('@fastify/cors');
 const compress = require('@fastify/compress');
 const rateLimit = require('@fastify/rate-limit');
 const fastifyStatic = require('@fastify/static');
+const multipart = require('@fastify/multipart');
 const { env } = require('./utils/env');
 const { AppError } = require('./utils/http');
 const { getUidForLog } = require('./utils/requestLog');
@@ -14,17 +15,20 @@ const { AVAILABLE_ROUTES } = require('./utils/routesManifest');
 const paymentRoutes = require('./routes/paymentRoutes');
 const userRoutes = require('./routes/userRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const upiRoutes = require('./routes/upiRoutes');
 
 function buildServer() {
   const publicDir = path.join(__dirname, '..', 'public');
   const adminDistDir = path.join(__dirname, '..', 'admin', 'dist');
+  const uploadsDir = path.join(__dirname, '..', 'uploads');
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
   const app = Fastify({
     trustProxy: true,
     logger: { level: env.isProduction ? 'info' : 'debug' },
     disableRequestLogging: env.isProduction,
     requestTimeout: env.requestTimeoutMs,
-    bodyLimit: 32 * 1024,
+    bodyLimit: 10 * 1024 * 1024, // 10 MB for screenshot uploads
   });
 
   app.addHook('onRequest', async (request) => {
@@ -54,6 +58,13 @@ function buildServer() {
     threshold: 512,
   });
 
+  app.register(multipart, {
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5 MB max screenshot
+      files: 1,
+    },
+  });
+
   app.register(cors, {
     origin: '*',
     methods: ['GET', 'POST'],
@@ -62,7 +73,7 @@ function buildServer() {
   app.register(fastifyStatic, {
     root: publicDir,
     prefix: '/',
-    wildcard: false,
+    wildcard: true,
     index: false,
   });
 
@@ -118,6 +129,8 @@ function buildServer() {
     return reply.sendFile('pay.html');
   });
 
+
+
   app.get('/health', async () => ({ status: 'ok' }));
 
   app.get('/api/health', async () => ({ ok: true }));
@@ -125,6 +138,7 @@ function buildServer() {
   app.register(paymentRoutes);
   app.register(userRoutes);
   app.register(adminRoutes);
+  app.register(upiRoutes);
 
   app.setErrorHandler((error, request, reply) => {
     if (error.retryAfter != null && (error.statusCode === 429 || error.statusCode === 403)) {

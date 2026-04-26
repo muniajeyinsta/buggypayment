@@ -3,3 +3,4 @@ node_modules/
 *.log
 .DS_Store
 debug-a4dcb6.ndjson
+uploads/

@@ -7,6 +7,8 @@ const AVAILABLE_ROUTES = [
   '/user/:uid',
   '/create-order',
   '/verify-payment',
+  '/upi-config',
+  '/upi-payment',
   '/debug/users',
   '/admin/users',
   '/admin/user/:id',

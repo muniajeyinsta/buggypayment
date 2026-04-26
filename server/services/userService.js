@@ -436,6 +436,74 @@ async function markPaymentPaid(uid, orderId, paymentId, plan) {
   return paidResponseFromRow(data, schema, paidAtIso);
 }
 
+/**
+ * Record a UPI payment with the user-submitted transaction ID.
+ * Marks the user as "Paid" and computes expiry.
+ * Admin can later verify the transaction ID in the admin panel.
+ */
+async function markUpiPaymentPending(uid, upiTransactionId, plan) {
+  if (!isSupabaseConfigured()) throw new AppError(503, 'Database not configured');
+  const sb = getSupabase();
+  const schema = await detectSchema();
+
+  const readQuery = sb
+    .from(TABLE)
+    .select(selectFieldsForPaymentRead(schema))
+    .eq(schema.id, uid)
+    .maybeSingle();
+  const { data: existing, error: readErr } = await withTimeout(
+    readQuery,
+    env.dbReadTimeoutMs,
+    'User lookup timed out',
+  );
+
+  if (readErr) {
+    logSupabaseError('read user before UPI payment', readErr);
+    if (readErr.code === '42P01') throw new AppError(500, 'Users table not found in database');
+    throw new AppError(502, 'Failed to load user');
+  }
+  if (!existing) throw new AppError(404, 'User not found');
+
+  const paidAtIso = new Date().toISOString();
+  const validUntil = computeNewExpiry(plan, existing[schema.status], existing[schema.expiry]);
+
+  const patch = {
+    [schema.status]: 'Paid',
+    [schema.expiry]: validUntil,
+  };
+
+  // Store UPI transaction ID in payment ID field
+  if (schema.paymentId) patch[schema.paymentId] = `UPI:${upiTransactionId}`;
+  if (schema.orderId) patch[schema.orderId] = `UPI_MANUAL:${upiTransactionId}`;
+  if (schema.paidAt) patch[schema.paidAt] = paidAtIso;
+  if (schema.updatedAt) patch[schema.updatedAt] = paidAtIso;
+  if (schema.plan) patch[schema.plan] = plan;
+
+  const updateQuery = sb
+    .from(TABLE)
+    .update(patch)
+    .eq(schema.id, uid)
+    .select(selectFieldsForPaymentWrite(schema))
+    .maybeSingle();
+  const { data, error } = await withTimeout(updateQuery, env.dbWriteTimeoutMs, 'Database write timed out');
+
+  if (error) {
+    logSupabaseError('mark UPI payment', error);
+    if (error.code === '42P01') throw new AppError(500, 'Users table not found in database');
+    throw new AppError(502, 'Failed to update payment status');
+  }
+  if (!data) throw new AppError(404, 'User not found');
+
+  console.info('[payment] upi_payment_recorded', {
+    user_id: uid,
+    upi_txn_id: upiTransactionId,
+    status: data[schema.status],
+    valid_until: validUntil,
+  });
+
+  return paidResponseFromRow(data, schema, paidAtIso);
+}
+
 async function debugUsersSample() {
   if (!isSupabaseConfigured()) throw new AppError(503, 'Database not configured');
   const sb = getSupabase();
@@ -460,6 +528,7 @@ module.exports = {
   getUserStatus,
   upsertUserForOrder,
   markPaymentPaid,
+  markUpiPaymentPending,
   debugUsersSample,
   finalizeUserStatusResponse,
 };

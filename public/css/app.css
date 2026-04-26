@@ -14,6 +14,9 @@
   --radius: 16px;
   --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
     "Apple Color Emoji", "Segoe UI Emoji";
+  --upi-purple: #5f259f;
+  --upi-purple-dark: #4a1d7d;
+  --upi-gradient: linear-gradient(135deg, #5f259f 0%, #8b5cf6 50%, #6d28d9 100%);
 }
 
 *,
@@ -374,6 +377,7 @@ input::placeholder {
   cursor: pointer;
   transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
   -webkit-tap-highlight-color: transparent;
+  text-decoration: none;
 }
 
 .btn:disabled {
@@ -419,6 +423,201 @@ input::placeholder {
   font-size: 1.0625rem;
 }
 
+/* UPI-specific button */
+.btn--upi {
+  background: var(--upi-gradient);
+  color: #ffffff;
+  box-shadow: 0 6px 24px rgba(95, 37, 159, 0.35);
+  flex-direction: column;
+  gap: 2px;
+  min-height: 64px;
+  padding: 12px 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn--upi::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.btn--upi:hover {
+  box-shadow: 0 8px 28px rgba(95, 37, 159, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn--upi:active {
+  transform: scale(0.98) translateY(0);
+}
+
+.upi-btn-icon {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.8;
+}
+
+.upi-btn-sub {
+  font-size: 0.75rem;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* UPI Payment View */
+.upi-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.upi-header .h1 {
+  margin: 0;
+}
+
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+
+.btn-back:hover {
+  border-color: #d1d5db;
+  color: var(--text);
+  background: #f9fafb;
+}
+
+.btn-back:active {
+  transform: scale(0.97);
+}
+
+.upi-summary-card {
+  margin-bottom: 16px;
+  padding: 16px 18px;
+}
+
+.upi-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.upi-summary-row + .upi-summary-row {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 12px;
+}
+
+.upi-summary-label {
+  font-size: 0.875rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.upi-summary-value {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.upi-summary-amount {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--green);
+  letter-spacing: -0.02em;
+}
+
+/* UPI Divider */
+.upi-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.upi-divider__line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.upi-divider__text {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* QR Code */
+.upi-qr-card {
+  padding: 22px 18px;
+}
+
+.upi-qr-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+.upi-qr-img {
+  width: 220px;
+  height: 220px;
+  border-radius: 12px;
+  border: 3px solid var(--green-soft-border);
+  padding: 8px;
+  background: #fff;
+  animation: fade-in 0.4s ease;
+}
+
+.upi-payee-hint {
+  margin: 8px 0 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.upi-payee-hint strong {
+  color: var(--text);
+  font-weight: 700;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+/* UPI Confirm Card */
+.upi-confirm-card {
+  margin-bottom: 8px;
+}
+
+.upi-confirm-title {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.upi-confirm-card .field {
+  margin-bottom: 14px;
+}
+
+/* Icons */
 .icon-circle {
   width: 56px;
   height: 56px;
@@ -505,6 +704,108 @@ input::placeholder {
   animation: spin 0.75s linear infinite;
 }
 
+.hidden {
+  display: none !important;
+}
+
+/* Screenshot Upload */
+.ss-field {
+  margin-bottom: 14px;
+}
+
+.ss-upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 16px;
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  background: #fafbfc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+  text-align: center;
+}
+
+.ss-upload-area:hover {
+  border-color: var(--green);
+  background: #f0fdf4;
+}
+
+.ss-upload-area:active {
+  transform: scale(0.99);
+}
+
+.ss-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+  padding: 0;
+  min-height: unset;
+}
+
+.ss-upload-icon {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.ss-label-text {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ss-hint-text {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.ss-preview {
+  margin-top: 10px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  animation: fade-in 0.3s ease;
+}
+
+.ss-preview img {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.btn-remove-ss {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  background: #fef2f2;
+  color: var(--danger);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-remove-ss:hover {
+  background: #fee2e2;
+  border-color: rgba(220, 38, 38, 0.4);
+}
+
+.btn-remove-ss:active {
+  transform: scale(0.97);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -534,8 +835,18 @@ input::placeholder {
   }
 }
 
+@keyframes pulse-border {
+  0%, 100% {
+    border-color: var(--green-soft-border);
+  }
+  50% {
+    border-color: var(--green);
+  }
+}
+
 @media (min-width: 480px) {
   .app {
     padding-top: calc(24px + env(safe-area-inset-top));
   }
 }
+
